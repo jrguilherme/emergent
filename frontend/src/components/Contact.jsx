@@ -6,15 +6,23 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
+import { Alert, AlertDescription } from './ui/alert';
 import { 
   Phone, 
   Mail, 
   MapPin, 
   Clock,
   MessageCircle,
-  Send
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import { mockData } from '../data/mock';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 export const Contact = () => {
   const [formData, setFormData] = useState({
@@ -25,11 +33,20 @@ export const Contact = () => {
     message: ''
   });
 
+  const [loading, setLoading] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null); // 'success', 'error', null
+  const [errorMessage, setErrorMessage] = useState('');
+
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+    // Clear status when user starts typing again
+    if (submitStatus) {
+      setSubmitStatus(null);
+      setErrorMessage('');
+    }
   };
 
   const handleServiceChange = (value) => {
@@ -39,17 +56,45 @@ export const Contact = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Mock form submission
-    alert('Formulário enviado com sucesso! Entraremos em contato em breve.');
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      service: '',
-      message: ''
-    });
+    setLoading(true);
+    setSubmitStatus(null);
+    setErrorMessage('');
+
+    try {
+      const response = await axios.post(`${API}/contacts`, {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone || null,
+        service: formData.service || null,
+        message: formData.message
+      });
+
+      if (response.data.success) {
+        setSubmitStatus('success');
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          service: '',
+          message: ''
+        });
+      }
+    } catch (error) {
+      setSubmitStatus('error');
+      if (error.response?.data?.detail) {
+        setErrorMessage(error.response.data.detail);
+      } else if (error.response?.status === 400) {
+        setErrorMessage('Por favor, verifique os dados informados.');
+      } else {
+        setErrorMessage('Erro ao enviar mensagem. Tente novamente ou entre em contato via WhatsApp.');
+      }
+      console.error('Error submitting form:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openWhatsApp = () => {
