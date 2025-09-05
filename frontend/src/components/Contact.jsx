@@ -182,6 +182,25 @@ export const Contact = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
+                  {/* Success/Error Messages */}
+                  {submitStatus === 'success' && (
+                    <Alert className="mb-6 border-green-200 bg-green-50">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-700">
+                        Contato enviado com sucesso! Entraremos em contato em breve.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {submitStatus === 'error' && (
+                    <Alert className="mb-6 border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-700">
+                        {errorMessage}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -193,6 +212,7 @@ export const Contact = () => {
                           onChange={handleInputChange}
                           placeholder="Seu nome completo"
                           required
+                          disabled={loading}
                           className="border-gray-300 focus:border-green-500 focus:ring-green-500"
                         />
                       </div>
@@ -207,6 +227,7 @@ export const Contact = () => {
                           onChange={handleInputChange}
                           placeholder="seu@email.com"
                           required
+                          disabled={loading}
                           className="border-gray-300 focus:border-green-500 focus:ring-green-500"
                         />
                       </div>
@@ -221,13 +242,14 @@ export const Contact = () => {
                           value={formData.phone}
                           onChange={handleInputChange}
                           placeholder="(45) 99999-9999"
+                          disabled={loading}
                           className="border-gray-300 focus:border-green-500 focus:ring-green-500"
                         />
                       </div>
                       
                       <div className="space-y-2">
                         <Label htmlFor="service">Serviço de interesse</Label>
-                        <Select onValueChange={handleServiceChange}>
+                        <Select onValueChange={handleServiceChange} disabled={loading}>
                           <SelectTrigger className="border-gray-300 focus:border-green-500 focus:ring-green-500">
                             <SelectValue placeholder="Selecione um serviço" />
                           </SelectTrigger>
@@ -252,6 +274,7 @@ export const Contact = () => {
                         placeholder="Descreva seu projeto ou necessidade..."
                         rows={4}
                         required
+                        disabled={loading}
                         className="border-gray-300 focus:border-green-500 focus:ring-green-500 resize-none"
                       />
                     </div>
@@ -259,11 +282,37 @@ export const Contact = () => {
                     <Button 
                       type="submit"
                       size="lg"
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                      disabled={loading}
+                      className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
                     >
-                      <Send className="w-5 h-5 mr-2" />
-                      Enviar Solicitação
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-5 h-5 mr-2" />
+                          Enviar Solicitação
+                        </>
+                      )}
                     </Button>
+
+                    {/* Alternative contact option */}
+                    {submitStatus === 'error' && (
+                      <div className="text-center">
+                        <p className="text-gray-600 mb-3">Ou entre em contato diretamente:</p>
+                        <Button 
+                          type="button"
+                          onClick={openWhatsApp}
+                          variant="outline"
+                          className="border-green-600 text-green-600 hover:bg-green-50"
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          WhatsApp
+                        </Button>
+                      </div>
+                    )}
                   </form>
                 </CardContent>
               </Card>
