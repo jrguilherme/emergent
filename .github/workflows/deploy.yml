@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ main ]     # roda a cada commit na main
+  workflow_dispatch:        # permite rodar manualmente
 
 permissions:
   contents: read
@@ -19,23 +19,56 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Detecta automaticamente se o app está em ./frontend ou na raiz (.)
+      - name: Detect app directory
+        id: detect
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "dir=frontend" >> $GITHUB_OUTPUT
+          else
+            echo "dir=." >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install
-        working-directory: frontend
-        run: npm ci
+          # cobre possíveis locais/tipos de lockfile para evitar o erro de "paths not resolved"
+          cache-dependency-path: |
+            package-lock.json
+            pnpm-lock.yaml
+            yarn.lock
+            frontend/package-lock.json
+            frontend/pnpm-lock.yaml
+            frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: ${{ steps.detect.outputs.dir }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
       - name: Build
-        working-directory: frontend
+        working-directory: ${{ steps.detect.outputs.dir }}
         run: npm run build
-      - name: SPA fallback (opcional p/ React Router)
-        run: cp frontend/build/index.html frontend/build/404.html
+
+      # React SPA fallback (evita 404 em rotas do React Router)
+      - name: SPA fallback
+        run: |
+          BUILD_DIR="${{ steps.detect.outputs.dir }}/build"
+          if [ -d "$BUILD_DIR" ]; then
+            cp "$BUILD_DIR/index.html" "$BUILD_DIR/404.html"
+          fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/build
+          path: ${{ steps.detect.outputs.dir }}/build
+
   deploy:
     needs: build
     runs-on: ubuntu-latest
