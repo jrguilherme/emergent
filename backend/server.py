@@ -95,7 +95,7 @@ class StatsResponse(BaseModel):
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "Mensura Maat API - Online", "version": "1.0.0"}
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -108,6 +108,98 @@ async def create_status_check(input: StatusCheckCreate):
 async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
+
+# Contact Routes
+@api_router.post("/contacts", response_model=ContactResponse)
+async def create_contact(contact_data: ContactCreate):
+    try:
+        # Create contact object
+        contact = Contact(
+            name=contact_data.name,
+            email=contact_data.email,
+            phone=contact_data.phone,
+            service=contact_data.service,
+            message=contact_data.message
+        )
+        
+        # Save to database
+        result = await db.contacts.insert_one(contact.dict())
+        
+        if result.inserted_id:
+            logger.info(f"New contact created: {contact.email}")
+            return ContactResponse(
+                success=True,
+                message="Contato enviado com sucesso! Entraremos em contato em breve.",
+                contact_id=contact.id
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Erro ao salvar contato")
+            
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating contact: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Erro interno do servidor. Tente novamente ou entre em contato via WhatsApp."
+        )
+
+@api_router.get("/contacts", response_model=ContactsListResponse)
+async def get_contacts(skip: int = 0, limit: int = 50):
+    """Get all contacts - for admin use"""
+    try:
+        # Get total count
+        total = await db.contacts.count_documents({})
+        
+        # Get contacts with pagination
+        contacts_cursor = db.contacts.find().sort("created_at", -1).skip(skip).limit(limit)
+        contacts_list = await contacts_cursor.to_list(limit)
+        
+        contacts = [Contact(**contact) for contact in contacts_list]
+        
+        return ContactsListResponse(
+            success=True,
+            contacts=contacts,
+            total=total
+        )
+    except Exception as e:
+        logger.error(f"Error fetching contacts: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar contatos")
+
+@api_router.get("/stats", response_model=StatsResponse)
+async def get_stats():
+    """Get basic statistics about contacts"""
+    try:
+        # Total contacts
+        total_contacts = await db.contacts.count_documents({})
+        
+        # Contacts this month
+        from datetime import datetime, timedelta
+        start_of_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        contacts_this_month = await db.contacts.count_documents({
+            "created_at": {"$gte": start_of_month}
+        })
+        
+        # Popular services
+        pipeline = [
+            {"$match": {"service": {"$ne": None, "$ne": ""}}},
+            {"$group": {"_id": "$service", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5},
+            {"$project": {"service": "$_id", "count": 1, "_id": 0}}
+        ]
+        
+        popular_services_cursor = db.contacts.aggregate(pipeline)
+        popular_services = await popular_services_cursor.to_list(5)
+        
+        return StatsResponse(
+            total_contacts=total_contacts,
+            contacts_this_month=contacts_this_month,
+            popular_services=popular_services
+        )
+    except Exception as e:
+        logger.error(f"Error fetching stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Erro ao buscar estatísticas")
 
 # Include the router in the main app
 app.include_router(api_router)
