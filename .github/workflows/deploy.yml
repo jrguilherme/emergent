@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]     # roda a cada commit na main
-  workflow_dispatch:        # permite rodar manualmente
+    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Detecta automaticamente se o app está em ./frontend ou na raiz (.)
+      # Descobre se o app está em ./frontend ou na raiz
       - name: Detect app directory
         id: detect
         run: |
@@ -34,7 +34,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          # cobre possíveis locais/tipos de lockfile para evitar o erro de "paths not resolved"
           cache-dependency-path: |
             package-lock.json
             pnpm-lock.yaml
@@ -43,7 +42,7 @@ jobs:
             frontend/pnpm-lock.yaml
             frontend/yarn.lock
 
-      - name: Install dependencies
+      - name: Install deps
         working-directory: ${{ steps.detect.outputs.dir }}
         run: |
           if [ -f package-lock.json ]; then
@@ -56,18 +55,30 @@ jobs:
         working-directory: ${{ steps.detect.outputs.dir }}
         run: npm run build
 
-      # React SPA fallback (evita 404 em rotas do React Router)
+      # Descobre a pasta final do build (CRA=build, Vite=dist, Next=out)
+      - name: Detect build output dir
+        id: out
+        run: |
+          BASE="${{ steps.detect.outputs.dir }}"
+          for CAND in build dist out; do
+            if [ -f "$BASE/$CAND/index.html" ]; then
+              echo "path=$BASE/$CAND" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+          echo "Nenhuma pasta de build com index.html encontrada"; exit 1
+
+      # SPA fallback (React Router)
       - name: SPA fallback
         run: |
-          BUILD_DIR="${{ steps.detect.outputs.dir }}/build"
-          if [ -d "$BUILD_DIR" ]; then
-            cp "$BUILD_DIR/index.html" "$BUILD_DIR/404.html"
+          if [ -f "${{ steps.out.outputs.path }}/index.html" ]; then
+            cp "${{ steps.out.outputs.path }}/index.html" "${{ steps.out.outputs.path }}/404.html"
           fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.detect.outputs.dir }}/build
+          path: ${{ steps.out.outputs.path }}
 
   deploy:
     needs: build
