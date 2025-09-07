@@ -27,38 +27,43 @@ jobs:
         with:
           node-version: 18
 
-      # ⚠️ Muda date-fns para ^3 só neste build (edita package.json no CI)
-      - name: Set date-fns to ^3 for build
+      # 1) Força date-fns ^3 e adiciona "overrides" para resolver AJV na árvore inteira
+      - name: Prepare package.json (date-fns ^3 + overrides de AJV)
         working-directory: frontend
         run: |
+          # troca date-fns do projeto para ^3 (satisfaz react-day-picker@8)
           npm pkg set dependencies.date-fns="^3"
-          cat package.json | head -n 120
 
+          # injeta/reseta "overrides" para forçar versões compatíveis com CRA/webpack
+          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...p.overrides,ajv:'^6.12.6','ajv-keywords':'^3.5.2'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+
+          echo 'package.json (trecho):'
+          cat package.json | sed -n '1,200p'
+
+      # 2) Instala dependências já com overrides aplicados
       - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
-
-      # 🔧 Alinhar AJV para o que CRA/Webpack esperam: ajv@6 + ajv-keywords@3
-      - name: Patch ajv toolchain to v6 (no-save)
-        working-directory: frontend
-        run: |
-          npm install --no-save --legacy-peer-deps ajv@^6 ajv-keywords@^3
+          echo 'Versões resolvidas de ajv/ajv-keywords:'
+          npx --yes npm-which npm >/dev/null 2>&1 || true
+          npm ls ajv ajv-keywords || true
 
       # (opcional/inofensivo) garante router se o app usar rotas
       - name: Ensure react-router-dom present (no-save)
         working-directory: frontend
         run: |
-          npm install --no-save --legacy-peer-deps react-router-dom@^6
+          npm install --no-save --legacy-peer-deps react-router-dom@^6 || true
 
+      # 3) Build com assets relativos (para subpasta /emergent)
       - name: Build app
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: "."      # assets relativos p/ /emergent
+          PUBLIC_URL: "."
         run: npm run build
 
-      # Se por algum motivo não gerar bundles, tenta fallback
+      # 4) Fallback: se não houver bundles, tenta react-scripts puro
       - name: Fallback build (react-scripts) if no bundles
         run: |
           if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
@@ -69,12 +74,12 @@ jobs:
             npx react-scripts build
           fi
 
+      # 5) SPA fallback + inspeção do que vai pro ar
       - name: Ensure build output & SPA fallback
         run: |
           test -f frontend/build/index.html
           cp frontend/build/index.html frontend/build/404.html
 
-      # 🔎 Inspeção: confirme scripts no index e bundles na pasta
       - name: Inspect build
         run: |
           echo "== Arquivos em frontend/build (nível 2) =="
@@ -82,6 +87,7 @@ jobs:
           echo "== Início do index.html gerado =="
           nl -ba frontend/build/index.html | sed -n '1,200p'
 
+      # 6) Publica
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
