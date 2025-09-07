@@ -21,31 +21,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # CRA/CRACO antigos funcionam melhor com Node 16
+      # Toolchains CRA/CRACO antigos funcionam melhor no Node 16
       - name: Setup Node 16
         uses: actions/setup-node@v4
         with:
           node-version: 16
 
-      - name: Show files
-        run: |
-          ls -la
-          echo "---- frontend ----"
-          ls -la frontend || true
-
-      # instala deps do projeto (ignora peer deps quebradas)
       - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # corrige cadeia ajv no ambiente de build (sem salvar no package.json)
-      - name: Patch ajv toolchain (build-only)
+      # 🔧 Alinha peer deps para o build, SEM alterar package.json
+      # - date-fns@^3 para satisfazer react-day-picker@8
+      # - ajv@^8 + ajv-keywords@^5 para resolver o erro do ajv
+      - name: Align peer deps for build (no-save)
         working-directory: frontend
         run: |
-          npm install --no-save ajv@^8 ajv-keywords@^5
+          npm install --no-save --legacy-peer-deps date-fns@^3
+          npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
 
-      # alguns toolchains antigos precisam disso em Node >=17; mantemos por segurança
       - name: Build app
         working-directory: frontend
         env:
