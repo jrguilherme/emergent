@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # precisamos escrever no Pages e ler repo
   pages: write
   id-token: write
 
@@ -21,41 +21,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Engines modernas (eslint etc.)
+      # Use Node 18 para satisfazer engines modernas (eslint, etc.)
       - name: Setup Node 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # 1) Força date-fns ^3 e adiciona "overrides" para resolver AJV na árvore inteira
-      - name: Prepare package.json (date-fns ^3 + overrides de AJV)
+      # 1) Ajustes no package.json só para o CI:
+      #    - date-fns ^3 (compatível com react-day-picker@8)
+      #    - overrides para travar schema-utils v3 (AJV v6), ajv v6 e ajv-keywords v3
+      - name: Prepare package.json (date-fns + overrides)
         working-directory: frontend
         run: |
-          # troca date-fns do projeto para ^3 (satisfaz react-day-picker@8)
           npm pkg set dependencies.date-fns="^3"
+          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...(p.overrides||{}),'schema-utils':'3.3.0','ajv':'6.12.6','ajv-keywords':'3.5.2'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          echo '--- package.json (trecho) ---'; sed -n '1,160p' package.json
 
-          # injeta/reseta "overrides" para forçar versões compatíveis com CRA/webpack
-          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...p.overrides,ajv:'^6.12.6','ajv-keywords':'^3.5.2'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
-
-          echo 'package.json (trecho):'
-          cat package.json | sed -n '1,200p'
-
-      # 2) Instala dependências já com overrides aplicados
-      - name: Install project deps
+      - name: Install deps (with overrides)
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
-          echo 'Versões resolvidas de ajv/ajv-keywords:'
-          npx --yes npm-which npm >/dev/null 2>&1 || true
-          npm ls ajv ajv-keywords || true
+          echo '--- npm ls ajv/ajv-keywords/schema-utils ---'
+          npm ls ajv ajv-keywords schema-utils || true
 
-      # (opcional/inofensivo) garante router se o app usar rotas
+      # (opcional) garante router disponível se o app usar rotas
       - name: Ensure react-router-dom present (no-save)
         working-directory: frontend
         run: |
           npm install --no-save --legacy-peer-deps react-router-dom@^6 || true
 
-      # 3) Build com assets relativos (para subpasta /emergent)
       - name: Build app
         working-directory: frontend
         env:
@@ -63,7 +57,6 @@ jobs:
           PUBLIC_URL: "."
         run: npm run build
 
-      # 4) Fallback: se não houver bundles, tenta react-scripts puro
       - name: Fallback build (react-scripts) if no bundles
         run: |
           if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
@@ -74,7 +67,6 @@ jobs:
             npx react-scripts build
           fi
 
-      # 5) SPA fallback + inspeção do que vai pro ar
       - name: Ensure build output & SPA fallback
         run: |
           test -f frontend/build/index.html
@@ -87,7 +79,6 @@ jobs:
           echo "== Início do index.html gerado =="
           nl -ba frontend/build/index.html | sed -n '1,200p'
 
-      # 6) Publica
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
