@@ -21,51 +21,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show tree (root)
-        run: |
-          pwd
-          ls -la
-          echo "---- frontend/ ----"
-          ls -la frontend || true
-
-      - name: Setup Node
+      # CRA/CRACO antigos funcionam melhor com Node 16
+      - name: Setup Node 16
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 16
 
-      - name: Check package.json (frontend)
-        working-directory: frontend
+      - name: Show files
         run: |
-          if [ ! -f package.json ]; then
-            echo "ERRO: frontend/package.json não encontrado"; exit 1
-          fi
-          echo "Conteúdo do package.json:"
-          cat package.json
+          ls -la
+          echo "---- frontend ----"
+          ls -la frontend || true
 
-      # instala ignorando incompatibilidades de peer-deps (comum em projetos CRA/craco)
-      - name: Install deps
+      # instala deps do projeto (ignora peer deps quebradas)
+      - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # alguns projetos com CRA falham em CI por warnings; desativa comportamento estrito
+      # corrige cadeia ajv no ambiente de build (sem salvar no package.json)
+      - name: Patch ajv toolchain (build-only)
+        working-directory: frontend
+        run: |
+          npm install --no-save ajv@^8 ajv-keywords@^5
+
+      # alguns toolchains antigos precisam disso em Node >=17; mantemos por segurança
       - name: Build app
         working-directory: frontend
         env:
           CI: "false"
-        run: |
-          # se o script "build" não existir, falha de forma clara
-          if ! jq -e '.scripts.build' package.json >/dev/null 2>&1; then
-            echo 'ERRO: "scripts.build" não definido em frontend/package.json'; exit 1
-          fi
-          npm run build
+          NODE_OPTIONS: "--openssl-legacy-provider"
+        run: npm run build
 
-      - name: Ensure build output exists
+      - name: Ensure build output & SPA fallback
         run: |
-          if [ ! -f frontend/build/index.html ]; then
-            echo "ERRO: frontend/build/index.html não encontrado após o build"; exit 1
-          fi
-          # SPA fallback (React Router)
+          test -f frontend/build/index.html
           cp frontend/build/index.html frontend/build/404.html
 
       - name: Upload Pages artifact
