@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Toolchains CRA/CRACO antigos funcionam melhor no Node 16
+      # CRA/CRACO antigos funcionam melhor no Node 16
       - name: Setup Node 16
         uses: actions/setup-node@v4
         with:
@@ -32,9 +32,7 @@ jobs:
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # 🔧 Alinha peer deps para o build, SEM alterar package.json
-      # - date-fns@^3 para satisfazer react-day-picker@8
-      # - ajv@^8 + ajv-keywords@^5 para resolver o erro do ajv
+      # Alinha peers só para o build (não altera package.json)
       - name: Align peer deps for build (no-save)
         working-directory: frontend
         run: |
@@ -45,7 +43,6 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
-          NODE_OPTIONS: "--openssl-legacy-provider"
         run: npm run build
 
       - name: Ensure build output & SPA fallback
