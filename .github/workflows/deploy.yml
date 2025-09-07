@@ -31,30 +31,46 @@ jobs:
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Align peer deps for build (no-save)
+      # Ajusta pares problemáticos só para o build (não altera package.json)
+      - name: Align peer deps (no-save)
         working-directory: frontend
         run: |
           npm install --no-save --legacy-peer-deps date-fns@^3
           npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
+          # garante router se o App usa rotas
+          npm install --no-save react-router-dom@^6
 
-      - name: Build app
+      # Build principal com CRACO (o que seu package.json indica)
+      - name: Build app (CRACO)
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: "."       # gera caminhos relativos (./static/...)
+          PUBLIC_URL: "."        # gera caminhos relativos (./static/...)
         run: npm run build
+
+      # Se por algum motivo o CRACO não injetou bundles, tenta fallback com react-scripts
+      - name: Fallback build (react-scripts) se não houver bundles
+        run: |
+          if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
+            echo "Bundles encontrados após CRACO. Fallback não necessário."
+          else
+            echo "Bundles NÃO encontrados. Rodando fallback com react-scripts..."
+            cd frontend
+            npx react-scripts build
+          fi
 
       - name: Ensure build output & SPA fallback
         run: |
           test -f frontend/build/index.html
+          # cria 404.html para SPA (React Router / HashRouter)
           cp frontend/build/index.html frontend/build/404.html
 
-      # 👇 INSPEÇÃO: lista o que será publicado e mostra as tags <script> do index.html
+      # Inspeção: lista arquivos e mostra as primeiras linhas do index gerado
       - name: Inspect build
         run: |
-          echo "== Arquivos em frontend/build (até 2 níveis) =="
+          echo "== Arquivos em frontend/build (nível 2) =="
           find frontend/build -maxdepth 2 -type f | sort | sed 's,^,  ,'
-          echo "== Primeiras linhas do index.html (procurando scripts) =="
+          echo "== Início do index.html gerado (deve ter <script src=...>) =="
           nl -ba frontend/build/index.html | sed -n '1,200p'
 
       - name: Upload Pages artifact
@@ -71,4 +87,3 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
-
