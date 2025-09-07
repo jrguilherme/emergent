@@ -21,26 +21,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show tree (root)
+        run: |
+          pwd
+          ls -la
+          echo "---- frontend/ ----"
+          ls -la frontend || true
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20   # sem cache pra evitar erro
+          node-version: 20
 
-      - name: Install dependencies
+      - name: Check package.json (frontend)
         working-directory: frontend
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
+          if [ ! -f package.json ]; then
+            echo "ERRO: frontend/package.json não encontrado"; exit 1
           fi
+          echo "Conteúdo do package.json:"
+          cat package.json
 
-      - name: Build React app
+      # instala ignorando incompatibilidades de peer-deps (comum em projetos CRA/craco)
+      - name: Install deps
         working-directory: frontend
-        run: npm run build
+        run: |
+          npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: SPA fallback (React Router)
-        run: cp frontend/build/index.html frontend/build/404.html
+      # alguns projetos com CRA falham em CI por warnings; desativa comportamento estrito
+      - name: Build app
+        working-directory: frontend
+        env:
+          CI: "false"
+        run: |
+          # se o script "build" não existir, falha de forma clara
+          if ! jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+            echo 'ERRO: "scripts.build" não definido em frontend/package.json'; exit 1
+          fi
+          npm run build
+
+      - name: Ensure build output exists
+        run: |
+          if [ ! -f frontend/build/index.html ]; then
+            echo "ERRO: frontend/build/index.html não encontrado após o build"; exit 1
+          fi
+          # SPA fallback (React Router)
+          cp frontend/build/index.html frontend/build/404.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
