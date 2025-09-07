@@ -21,31 +21,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node 18 atende engines modernas (eslint, etc.)
+      # Engines modernas (eslint etc.)
       - name: Setup Node 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      # ⚠️ Altera date-fns para ^3 só neste build (edita package.json no CI)
+      # ⚠️ Muda date-fns para ^3 só neste build (edita package.json no CI)
       - name: Set date-fns to ^3 for build
         working-directory: frontend
         run: |
           npm pkg set dependencies.date-fns="^3"
-          cat package.json | head -n 80
+          cat package.json | head -n 120
 
       - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # Corrige cadeia do ajv (erro 'ajv/dist/compile/codegen')
-      - name: Patch ajv toolchain (no-save)
+      # 🔧 Alinhar AJV para o que CRA/Webpack esperam: ajv@6 + ajv-keywords@3
+      - name: Patch ajv toolchain to v6 (no-save)
         working-directory: frontend
         run: |
-          npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
+          npm install --no-save --legacy-peer-deps ajv@^6 ajv-keywords@^3
 
-      # Garante router compatível (não altera seu package.json)
+      # (opcional/inofensivo) garante router se o app usar rotas
       - name: Ensure react-router-dom present (no-save)
         working-directory: frontend
         run: |
@@ -55,9 +55,10 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: "."
+          PUBLIC_URL: "."      # assets relativos p/ /emergent
         run: npm run build
 
+      # Se por algum motivo não gerar bundles, tenta fallback
       - name: Fallback build (react-scripts) if no bundles
         run: |
           if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
@@ -73,6 +74,7 @@ jobs:
           test -f frontend/build/index.html
           cp frontend/build/index.html frontend/build/404.html
 
+      # 🔎 Inspeção: confirme scripts no index e bundles na pasta
       - name: Inspect build
         run: |
           echo "== Arquivos em frontend/build (nível 2) =="
