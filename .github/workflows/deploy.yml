@@ -49,6 +49,14 @@ jobs:
           test -f frontend/build/index.html
           cp frontend/build/index.html frontend/build/404.html
 
+      # 👇 INSPEÇÃO: lista o que será publicado e mostra as tags <script> do index.html
+      - name: Inspect build
+        run: |
+          echo "== Arquivos em frontend/build (até 2 níveis) =="
+          find frontend/build -maxdepth 2 -type f | sort | sed 's,^,  ,'
+          echo "== Primeiras linhas do index.html (procurando scripts) =="
+          nl -ba frontend/build/index.html | sed -n '1,200p'
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -63,3 +71,4 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
