@@ -21,40 +21,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 16
+      # Use Node 18 para satisfazer engines modernas (eslint etc.)
+      - name: Setup Node 18
         uses: actions/setup-node@v4
         with:
-          node-version: 16
+          node-version: 18
 
       - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # Ajusta pares problemáticos só para o build (não altera package.json)
-      - name: Align peer deps (no-save)
+      # 👇 Força date-fns@^3 via "overrides" TEMPORÁRIO (sem commit)
+      - name: Pin date-fns to ^3 (override for build only)
         working-directory: frontend
         run: |
-          npm install --no-save --legacy-peer-deps date-fns@^3
-          npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
-          # garante router se o App usa rotas
-          npm install --no-save react-router-dom@^6
+          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...(p.overrides||{}),'date-fns':'^3'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          npm install --legacy-peer-deps --no-audit --no-fund
 
-      # Build principal com CRACO (o que seu package.json indica)
-      - name: Build app (CRACO)
+      # 👇 Corrige cadeia do ajv (erro 'ajv/dist/compile/codegen')
+      - name: Patch ajv toolchain (no-save)
+        working-directory: frontend
+        run: |
+          npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
+
+      # Se seu app usa rotas, garanta router compatível (opcional, inofensivo)
+      - name: Ensure react-router-dom present (no-save)
+        working-directory: frontend
+        run: |
+          npm install --no-save --legacy-peer-deps react-router-dom@^6
+
+      - name: Build app
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: "."        # gera caminhos relativos (./static/...)
+          PUBLIC_URL: "."       # gera caminhos relativos (./static/...)
         run: npm run build
 
-      # Se por algum motivo o CRACO não injetou bundles, tenta fallback com react-scripts
-      - name: Fallback build (react-scripts) se não houver bundles
+      # Se por algum motivo os bundles não existirem, tenta fallback com react-scripts
+      - name: Fallback build (react-scripts) if no bundles
         run: |
           if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
-            echo "Bundles encontrados após CRACO. Fallback não necessário."
+            echo "Bundles encontrados após build principal."
           else
-            echo "Bundles NÃO encontrados. Rodando fallback com react-scripts..."
+            echo "Bundles NÃO encontrados; tentando fallback com react-scripts..."
             cd frontend
             npx react-scripts build
           fi
@@ -62,15 +72,14 @@ jobs:
       - name: Ensure build output & SPA fallback
         run: |
           test -f frontend/build/index.html
-          # cria 404.html para SPA (React Router / HashRouter)
           cp frontend/build/index.html frontend/build/404.html
 
-      # Inspeção: lista arquivos e mostra as primeiras linhas do index gerado
+      # 🔎 Inspeção: lista arquivos e mostra início do index.html (deve ter <script src=...>)
       - name: Inspect build
         run: |
           echo "== Arquivos em frontend/build (nível 2) =="
           find frontend/build -maxdepth 2 -type f | sort | sed 's,^,  ,'
-          echo "== Início do index.html gerado (deve ter <script src=...>) =="
+          echo "== Início do index.html gerado =="
           nl -ba frontend/build/index.html | sed -n '1,200p'
 
       - name: Upload Pages artifact
