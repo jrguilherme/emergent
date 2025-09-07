@@ -21,31 +21,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Use Node 18 para satisfazer engines modernas (eslint etc.)
+      # Node 18 atende engines modernas (eslint, etc.)
       - name: Setup Node 18
         uses: actions/setup-node@v4
         with:
           node-version: 18
+
+      # ⚠️ Altera date-fns para ^3 só neste build (edita package.json no CI)
+      - name: Set date-fns to ^3 for build
+        working-directory: frontend
+        run: |
+          npm pkg set dependencies.date-fns="^3"
+          cat package.json | head -n 80
 
       - name: Install project deps
         working-directory: frontend
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-      # 👇 Força date-fns@^3 via "overrides" TEMPORÁRIO (sem commit)
-      - name: Pin date-fns to ^3 (override for build only)
-        working-directory: frontend
-        run: |
-          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...(p.overrides||{}),'date-fns':'^3'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
-          npm install --legacy-peer-deps --no-audit --no-fund
-
-      # 👇 Corrige cadeia do ajv (erro 'ajv/dist/compile/codegen')
+      # Corrige cadeia do ajv (erro 'ajv/dist/compile/codegen')
       - name: Patch ajv toolchain (no-save)
         working-directory: frontend
         run: |
           npm install --no-save --legacy-peer-deps ajv@^8 ajv-keywords@^5
 
-      # Se seu app usa rotas, garanta router compatível (opcional, inofensivo)
+      # Garante router compatível (não altera seu package.json)
       - name: Ensure react-router-dom present (no-save)
         working-directory: frontend
         run: |
@@ -55,10 +55,9 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: "."       # gera caminhos relativos (./static/...)
+          PUBLIC_URL: "."
         run: npm run build
 
-      # Se por algum motivo os bundles não existirem, tenta fallback com react-scripts
       - name: Fallback build (react-scripts) if no bundles
         run: |
           if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
@@ -74,7 +73,6 @@ jobs:
           test -f frontend/build/index.html
           cp frontend/build/index.html frontend/build/404.html
 
-      # 🔎 Inspeção: lista arquivos e mostra início do index.html (deve ter <script src=...>)
       - name: Inspect build
         run: |
           echo "== Arquivos em frontend/build (nível 2) =="
