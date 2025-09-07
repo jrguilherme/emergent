@@ -21,7 +21,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # CRA/CRACO antigos funcionam melhor no Node 16
       - name: Setup Node 16
         uses: actions/setup-node@v4
         with:
@@ -32,15 +31,6 @@ jobs:
         run: |
           npm install --legacy-peer-deps --no-audit --no-fund
 
-        - name: Build app
-          working-directory: frontend
-          env:
-          CI: "false"
-          PUBLIC_URL: "/emergent"   # 👈 faz o React gerar links relativos à subpasta
-        run: npm run build
-
-
-      # Alinha peers só para o build (não altera package.json)
       - name: Align peer deps for build (no-save)
         working-directory: frontend
         run: |
@@ -51,6 +41,7 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
+          PUBLIC_URL: "/emergent"
         run: npm run build
 
       - name: Ensure build output & SPA fallback
