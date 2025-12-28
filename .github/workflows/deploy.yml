@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # precisamos escrever no Pages e ler repo
+  contents: read
   pages: write
   id-token: write
 
@@ -21,51 +21,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Use Node 18 para satisfazer engines modernas (eslint, etc.)
-      - name: Setup Node 18
+      - name: Setup Node 18 (with Yarn cache)
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
 
-      # 1) Ajustes no package.json só para o CI:
-      #    - date-fns ^3 (compatível com react-day-picker@8)
-      #    - overrides para travar schema-utils v3 (AJV v6), ajv v6 e ajv-keywords v3
-      - name: Prepare package.json (date-fns + overrides)
-        working-directory: frontend
+      - name: Enable Yarn 1.22.22
         run: |
-          npm pkg set dependencies.date-fns="^3"
-          node -e "const fs=require('fs');const p=require('./package.json');p.overrides={...(p.overrides||{}),'schema-utils':'3.3.0','ajv':'6.12.6','ajv-keywords':'3.5.2'};fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
-          echo '--- package.json (trecho) ---'; sed -n '1,160p' package.json
+          corepack enable
+          corepack prepare yarn@1.22.22 --activate
+          yarn --version
 
-      - name: Install deps (with overrides)
+      - name: Install deps
         working-directory: frontend
-        run: |
-          npm install --legacy-peer-deps --no-audit --no-fund
-          echo '--- npm ls ajv/ajv-keywords/schema-utils ---'
-          npm ls ajv ajv-keywords schema-utils || true
+        run: yarn install --frozen-lockfile --non-interactive
 
-      # (opcional) garante router disponível se o app usar rotas
-      - name: Ensure react-router-dom present (no-save)
-        working-directory: frontend
-        run: |
-          npm install --no-save --legacy-peer-deps react-router-dom@^6 || true
-
-      - name: Build app
+      - name: Build app (CRA/CRACO)
         working-directory: frontend
         env:
           CI: "false"
           PUBLIC_URL: "."
-        run: npm run build
-
-      - name: Fallback build (react-scripts) if no bundles
-        run: |
-          if ls frontend/build/static/js/*.js >/dev/null 2>&1; then
-            echo "Bundles encontrados após build principal."
-          else
-            echo "Bundles NÃO encontrados; tentando fallback com react-scripts..."
-            cd frontend
-            npx react-scripts build
-          fi
+        run: yarn build
 
       - name: Ensure build output & SPA fallback
         run: |
